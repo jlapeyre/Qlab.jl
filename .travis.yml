@@ -8,9 +8,9 @@ notifications:
   email: false
 
 script:
-  - julia -e 'Pkg.add("Conda")'
+  - julia -e 'ENV["PYTHON"]=""; Pkg.add("Conda")'
   - julia -e 'ENV["PYTHON"]=""; Pkg.build("Conda")'
-  - julia -e 'Pkg.add("PyCall")'
+  - julia -e 'ENV["PYTHON"]=""; Pkg.add("PyCall")'
   - julia -e 'ENV["PYTHON"]=""; Pkg.build("PyCall")'
   - julia -e 'using Conda; Conda.add("matplotlib")'
   - julia -e 'Pkg.clone(pwd())'
