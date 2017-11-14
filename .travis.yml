@@ -12,7 +12,7 @@ script:
   - julia -e 'Pkg.add("PyCall")'
   - julia -e 'ENV["PYTHON"]=""; Pkg.build("PyCall")'
   - julia -e 'using Conda; Conda.add("matplotlib")'
+  - LD_PRELOAD= /home/travis/.julia/v0.6/Conda/deps/usr/lib/libz.so
   - julia -e 'Pkg.clone(pwd())'
   - julia -e 'Pkg.build("Qlab")'
-  - LD_PRELOAD=${HOME}/.julia/v0.6/Conda/deps/usr/lib/libz.so julia -e 'Pkg.clone(pwd())'
   - julia --check-bounds=yes -e 'Pkg.test("Qlab", coverage=true)'
