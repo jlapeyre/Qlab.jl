@@ -8,8 +8,8 @@ notifications:
   email: false
 
 script:
-  - LD_PRELOAD=${HOME}/.julia/v0.6/Conda/deps/usr/lib/libz.so julia -e 'Pkg.clone(pwd());Pkg.test("ClimateTools"; coverage=true);'
   - julia -e 'Pkg.add("Conda")'
+  - LD_PRELOAD=${HOME}/.julia/v0.6/Conda/deps/usr/lib/libz.so julia -e 'Pkg.clone(pwd());Pkg.test("ClimateTools"; coverage=true);'
   - julia -e 'Pkg.add("PyCall")'
   - julia -e 'ENV["PYTHON"]=""; Pkg.build("PyCall")'
   - julia -e 'using Conda; Conda.add("matplotlib")'
