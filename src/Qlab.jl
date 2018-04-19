@@ -1,4 +1,6 @@
 module Qlab
+	using PyCall
+	pygui(:tk)
 	using Compat, PyPlot
 
 	export load_data, load_latest_data, KT_estimation, pauliAlphabet, filter_records, comp_to_paulis, savitsky_golay, read_records, digitize, unwrap, unwrap!, plot2D, plot1D
