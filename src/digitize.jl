@@ -1,4 +1,4 @@
-using StatsBase
+using StatsBase, Printf
 
 """
    digitize(data, cal0, cal1, mode=:equal)
@@ -105,8 +105,8 @@ function map_2D(k00, k01, k10, k11, n; thresholds=(NaN, NaN))
           assignmat[xi, yi] = highest_kde_ind
         end
       else
-        assign_a1 = mean(k00.density) > mean(k01.density)? Int(xpoints[xi] < thresholds[1]):Int(xpoints[xi] > thresholds[1])
-        assign_a2 = mean(k00.density) > mean(k10.density)? Int(ypoints[yi] < thresholds[2]):Int(ypoints[yi] > thresholds[2])
+        assign_a1 = mean(k00.density) > mean(k01.density) ? Int(xpoints[xi] < thresholds[1]):Int(xpoints[xi] > thresholds[1])
+        assign_a2 = mean(k00.density) > mean(k10.density) ? Int(ypoints[yi] < thresholds[2]):Int(ypoints[yi] > thresholds[2])
         assignmat[xi, yi] = assign_a1 + 2*assign_a2 + 1
       end
     end
@@ -291,8 +291,8 @@ end
 Get single-qubit assingment probabilities as a function of the other 2-qubit states. Useful to assess readout
 crosstalk.
 """
-#TODO: generalize for N>3 qubits
 function get_1q_fid_3q(probmat)
+  # TODO: generalize for N>3 qubits
   inds= 1:4
   inds2 = [1,2,5,6]
   inds3 = 1:2:7

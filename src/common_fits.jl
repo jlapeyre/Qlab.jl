@@ -6,7 +6,7 @@
 #
 #		http://www.apache.org/licenses/LICENSE-2.0
 
-using LsqFit
+using LsqFit, Printf
 
 ## TODO: Devise a way to get specify a fit as a string...
 ## TODO: Fix types...
@@ -46,7 +46,7 @@ function generic_fit(xpts, ypts, model, initial_guess, fit_params, model_string:
           sq_error = sum(((model(xpts, result.param) - ypts).^2))
         else
           @assert length(ypts) == length(yvars) "Y data and Y variance lengths must match."
-          result = curve_fit(model, xpts, ypts, 1./sqrt(yvars), initial_guess)
+          result = curve_fit(model, xpts, ypts, 1 ./ sqrt(yvars), initial_guess)
           errors = estimate_errors(result)
           sq_error = sum(((model(xpts, result.param) - ypts).^2)./yvars)
         end
