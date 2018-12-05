@@ -42,12 +42,12 @@ function generic_fit(xpts, ypts, model, initial_guess, fit_params, model_string:
     #try
         if isempty(yvars)
           result = curve_fit(model, xpts, ypts, initial_guess)
-          errors = estimate_errors(result)
+          errors = margin_error(result, 0.05)
           sq_error = sum(((model(xpts, result.param) - ypts).^2))
         else
           @assert length(ypts) == length(yvars) "Y data and Y variance lengths must match."
-          result = curve_fit(model, xpts, ypts, 1./sqrt(yvars), initial_guess)
-          errors = estimate_errors(result)
+          result = curve_fit(model, xpts, ypts, 1 ./ sqrt(yvars), initial_guess)
+          errors = margin_error(result, 0.05)
           sq_error = sum(((model(xpts, result.param) - ypts).^2)./yvars)
         end
     #catch
@@ -73,7 +73,7 @@ Fit to exponential T decay y = a exp(-t/T) + b.
 """
 function fit_t1(xpts, ypts, yvars=[])
     T1_fit_dict(p) = Dict("a" => p[1], "T" => p[2], "b" => p[3])
-    model(t, p) = p[1]*exp.(-t ./ p[2]) + p[3]
+    model(t, p) = p[1].*exp.(-t ./ p[2]) .+ p[3]
     p_guess = [ypts[1]-ypts[end], xpts[end]/3., ypts[end]]
     return generic_fit(xpts, ypts, model, p_guess, T1_fit_dict,
               "a * exp(-t/T) + b", yvars=yvars)
@@ -94,8 +94,8 @@ end
 Fit to linear model y = ax + b.
 """
 function fit_line(xpts, ypts, yvars=[])
-    model(t, p) = p[1]*t + p[2]
-    p_guess = [-ypts[indmin(abs.(xpts))]/xpts[indmin(abs.(ypts))], ypts[indmin(abs.(xpts))]]
+    model(t, p) = p[1]*t .+ p[2]
+    p_guess = [-ypts[findmin(abs.(xpts))[2]]/xpts[findmin(abs.(ypts))[2]], ypts[findmin(abs.(xpts))[2]]]
     return generic_fit(xpts, ypts, model, p_guess,
     x->Dict("a" => x[1], "b"=>x[2]), "ax + b", yvars=yvars)
 end
@@ -107,7 +107,7 @@ with optional weights for each point.
 function fit_ramsey(xpts, ypts, yvars=[])
 
     fit_dict1(p) = Dict("a"=>p[1], "T"=>p[2], "f"=>p[3], "ϕ"=>p[4], "b"=>p[5])
-    model(t, p) = p[1]*exp.(-t ./ p[2]).*cos.(2π*p[3] .* t + p[4]) + p[5]
+    model(t, p) = p[1].*exp.(-t ./ p[2]).*cos.(2π*p[3] .* t .+ p[4]) .+ p[5]
     # Use KT estimation to get a guess for the fit
     freqs,Ts,amps = KT_estimation(ypts-mean(ypts), xpts[2]-xpts[1], 1)
     p_guess = [abs(amps[1]), Ts[1], freqs[1], angle(amps[1]), mean(ypts)];
@@ -223,9 +223,9 @@ function analyzeRB(ypts, seqlengths; purity=false)
     fit_curve = (xfine, model(xfine, fit.param))
     errors = estimate_errors(fit)
     if purity
-        @printf("ϵ_inc = %0.3f%%\n", 0.5*(1-sqrt(1-fit.param[2]))*100)
+        println("ϵ_inc = %0.3f%%\n", 0.5*(1-sqrt(1-fit.param[2]))*100)
     else
-        @printf("ϵ = %0.3f%%\n", fit.param[2]/2*100)
+        println("ϵ = %0.3f%%\n", fit.param[2]/2*100)
     end
     return (xpts, data, fit.param, fit_curve, errors)
 end
