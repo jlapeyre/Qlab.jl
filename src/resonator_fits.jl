@@ -3,6 +3,9 @@ using Optim
 using MicroLogging
 using PyPlot
 using Roots
+using DSP
+using Statistics: mean
+using LinearAlgebra
 
 #Fitting a biased Lorentzian to amplitude data.
 """
@@ -101,7 +104,7 @@ struct CircleFitResult
 end
 
 #Fitting to the resonance circle of a quarter-wave resonator
-function fit_resonance_circle{T <: AbstractFloat}(freq::Vector{T}, data::Vector{Complex{T}}; kwargs...)
+function fit_resonance_circle(freq::Vector{T}, data::Vector{Complex{T}}; kwargs...) where {T <: AbstractFloat}
   """
   Fits complex-valued data
 
@@ -124,7 +127,7 @@ function fit_resonance_circle{T <: AbstractFloat}(freq::Vector{T}, data::Vector{
   function χ2(data, R, xc, yc)
     x = real.(data)
     y = imag.(data)
-    d = sqrt.( (x-xc).^2 + (y-yc).^2 ) - R
+    d = sqrt.( (x .- xc).^2 .+ (y .- yc).^2 ) .- R
     return sum(d.^2)
   end
 
@@ -139,7 +142,7 @@ function fit_resonance_circle{T <: AbstractFloat}(freq::Vector{T}, data::Vector{
   @debug "Fit circle to delay corrected data with χ² = $(χ2(Sp, R, xc, yc))."
 
   #Translate circle to origin and fit overall phase delay and scaling
-  St = Sp - (xc + 1im * yc)
+  St = Sp .- (xc + 1im * yc)
   _, _, θ = fit_phase(freq, St)
   #find f → ∞ point -- this part seems fragile...
   β = mod(θ + π, π)
@@ -158,15 +161,15 @@ function fit_resonance_circle{T <: AbstractFloat}(freq::Vector{T}, data::Vector{
   @debug "Fit circle to calibrated data with χ² = $(χ2(Sc, Rc, xcc, ycc))."
 
   N = length(data)
-  r = sqrt.((real(Sc) - xcc).^2 + (imag(Sc) - ycc).^2)
-  SNR = Rc / sqrt(sum((r - Rc).^2)/(N-1))
+  r = sqrt.((real(Sc) .- xcc).^2 .+ (imag(Sc) .- ycc).^2)
+  SNR = Rc ./ sqrt(sum((r .- Rc).^2)./(N-1))
 
   @debug "Data has an SNR of $(SNR)."
 
   ϕ = -asin(ycc/Rc)
   @debug "Found impedance mismatch angle: ϕ = $(ϕ)"
   #Final fit to phase to extract resonant frequency and Q
-  Sct = Sc - (xcc + 1im * ycc)
+  Sct = Sc .- (xcc + 1im * ycc)
   f0, Qr, _ = fit_phase(freq, Sct)
 
   Qc_cplx = Qr/(2 * Rc * exp(-1im * ϕ))
@@ -229,25 +232,30 @@ function fit_phase(freq, data)
     Q: Quality factor.
     Θ0: Offset phase angle.
   """
-  model(x, p) = p[1] + 2. * slope * atan.(2 * p[2] *(1. - x / p[3]))
+  model(x, p) = p[1] .+ 2. * slope * atan.(2 * p[2] .* (1. .- x ./ p[3]))
   ϕ = unwrap(angle.(data))
   #guesses for initial parameters
-  idx = indmin(abs.(ϕ - mean(ϕ)))
+  idx = findmin(abs.(ϕ .- mean(ϕ)))[2]
   if mean(ϕ[1:9]) > mean(ϕ[end-9:end])
-    j = findfirst(x -> x - ϕ[idx] < π/2., ϕ)
-    k = findfirst(x -> x - ϕ[idx] < -π/2., ϕ)
+    j = findfirst(x -> x .- ϕ[idx] < π/2., ϕ)
+    k = findfirst(x -> x .- ϕ[idx] < -π/2., ϕ)
     slope = 1
   else
-    j = findfirst(x -> x - ϕ[idx] > π/2., ϕ)
-    k = findfirst(x -> x - ϕ[idx] > -π/2., ϕ)
+    j = findfirst(x -> x .- ϕ[idx] > π/2., ϕ)
+    k = findfirst(x -> x .- ϕ[idx] > -π/2., ϕ)
     slope = -1
   end
-  Qguess = freq[idx]/abs.(freq[j] - freq[k])
+  Qguess = freq[idx] /abs.(freq[j] - freq[k])
   fit = curve_fit(model, freq, ϕ, [ϕ[idx], Qguess, freq[idx]])
   χ = sum(fit.resid.^2)
 
   @debug "Frequency vs. Phase fit found: f₀ = $(fit.param[3]), Q = $(fit.param[2]), θ₀ = $(fit.param[3])"
   @debug "Phase fit χ² = $(χ)"
+
+
+  plot(freq, ϕ, ".")
+  plot(freq, model(freq, fit.param))
+
   #@assert χ < 10 "Could not fit phase: χ² = $(χ)"
 
   return fit.param[3], fit.param[2], fit.param[1]
@@ -265,12 +273,12 @@ function fit_delay(freq, data)
   function delay_model(x)
     ddata = data .* exp.(2. * π * 1im * freq * x)
     R, xc, yc = fit_circle(real.(ddata), imag.(ddata))
-    d = sqrt.((real.(ddata) - xc).^2 + (imag.(ddata) - yc).^2) - R
+    d = sqrt.((real.(ddata) .- xc).^2 .+ (imag.(ddata) .- yc).^2) .- R
     return sum(d.^2)
   end
 
   ϕ = unwrap(angle.(data))
-  linfit(x,p) = p[1] + x * p[2]
+  linfit(x,p) = p[1] .+ x * p[2]
   fit = curve_fit(linfit, freq, ϕ, [mean(ϕ), 0])
   ϕ0 = fit.param[2]
   result = optimize(delay_model, -1.5*abs(ϕ0), 1.5*abs(ϕ0)) #would prefer 1D gradient descent
@@ -293,7 +301,7 @@ function lorentzian_resonance(p::CircleFitParams, f)
   """
   Qc_cplx = 1 / ((1/p.Qc)*exp(1im*p.ϕ))
   Q = 1/(1/p.Qi + real(1/Qc_cplx))
-  return p.A*exp(1im*p.α).*exp.(-2π*1im*f*p.τ).*(1 - (Q/p.Qc)*exp(1im*p.ϕ)./(1 + 2*1im*Q*(f/p.f0 - 1)));
+  return @. p.A*exp(1im*p.α).*exp.(-2π*1im*f*p.τ).*(1 - (Q/p.Qc)*exp(1im*p.ϕ)./(1 + 2*1im*Q*(f/p.f0 - 1)));
 end
 
 function lorentzian_resonance(p::Array, f)
@@ -315,13 +323,13 @@ function simulate_resonance(kwargs...)
   α = 0.35 * π
   A = 0.23
   df = f0/Q;
-  freqs = linspace(f0 - 6*df, f0 + 6*df, 401)
+  freqs = range(f0 - 6*df, stop=f0 + 6*df, length=401)
   p = CircleFitParams(f0, Qi, Qc, ϕ, τ, α, A)
-  data = lorentzian_resonance(p, freqs);
+  data = lorentzian_resonance(p, vec(freqs));
   # add some noise
   rand_phase = 2π*0.001*randn(length(freqs));
   rand_amp = 0.002*randn(length(freqs));
-  data = data.*exp(-1im*rand_phase).*(1+rand_amp);
+  data = data.*exp.(-1im*rand_phase).*(1.0 .+ rand_amp);
 
   return freqs, data, p
 end
@@ -355,12 +363,12 @@ function fit_circle(x, y; refine=false)
 
   F(η) = det(M - η*B)
   #We use Newton's method to guarantee convergence to the smallest positive eigenvalue
-  ηs = newton(F, 0.0)
+  ηs = fzero(F, 0.0)
   ev = nullspace(M - ηs*B)
 
   xc = -ev[2]/2/ev[1]
   yc = -ev[3]/2/ev[1]
-  R = sqrt(ev[2]^2 + ev[3]^2 - 4*ev[1]*ev[4])/2./abs(ev[1])
+  R = sqrt(ev[2]^2 + ev[3]^2 - 4*ev[1]*ev[4])/ 2. /abs(ev[1])
 
   return R, xc, yc
 end
@@ -370,7 +378,7 @@ function fit_circle_LM(x, y, initial_guess)
 
     function resid(p)
         C = sqrt.((x-p[2]).^2 + (y-p[3]).^2)
-        W = 1./sqrt.((p[2]-x).^2 + (p[3]-y).^2)
+        W = 1. / sqrt.((p[2]-x).^2 + (p[3]-y).^2)
         return (p[1] - C) .* W
     end
 
