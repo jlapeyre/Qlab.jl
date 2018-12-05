@@ -110,7 +110,7 @@ function fit_ramsey(xpts, ypts, yvars=[])
     fit_dict1(p) = Dict("a"=>p[1], "T"=>p[2], "f"=>p[3], "ϕ"=>p[4], "b"=>p[5])
     model(t, p) = p[1].*exp.(-t ./ p[2]).*cos.(2π*p[3] .* t .+ p[4]) .+ p[5]
     # Use KT estimation to get a guess for the fit
-    freqs,Ts,amps = KT_estimation(ypts-mean(ypts), xpts[2]-xpts[1], 1)
+    freqs,Ts,amps = KT_estimation(ypts .- mean(ypts), xpts[2]-xpts[1], 1)
     p_guess = [abs(amps[1]), Ts[1], freqs[1], angle(amps[1]), mean(ypts)];
 
     return generic_fit(xpts, ypts, model, p_guess,
@@ -126,16 +126,16 @@ optionally taking variances into account, and report which should be
 used based on Akaike's Information Criterion (AIC). This assumes
 Gaussian statistics for each observation.
 """
-function fit_twofreq_ramsey(xpts, ypts, yvars=[])
+function fit_twofreq_ramsey(xpts, ypts, yvars=[]; use_aic=true)
     fit_dict2(p) = Dict("a₁"=>p[1], "T₁"=>p[2], "f₁"=>p[3], "ϕ₁"=>p[4],
     "a₂"=>p[5], "T₂"=>p[6], "f₂"=>p[7], "ϕ₂"=>p[8],
     "b"=>p[9])
-    model2(t, p) = ( p[1] * exp.(-t ./ p[2]) .* cos.(2π * p[3] .*t + p[4]) +
-    p[5] * exp.(-t ./ p[6]) .* cos.(2π * p[7] .*t + p[8]) + p[9] )
+    model2(t, p) = ( p[1] * exp.(-t ./ p[2]) .* cos.(2π * p[3] .*t .+ p[4]) .+
+    p[5] * exp.(-t ./ p[6]) .* cos.(2π * p[7] .*t .+ p[8]) .+ p[9] )
 
     #Use KT estimation to get a guess for the fit
-    freqs,Ts,amps = KT_estimation(ypts-mean(ypts), xpts[2]-xpts[1], 2)
-    phases = angle(amps)
+    freqs,Ts,amps = KT_estimation(ypts.-mean(ypts), xpts[2]-xpts[1], 2)
+    phases = angle.(amps)
     amps = abs.(amps)
     p_guess = [amps[1], Ts[1], freqs[1], phases[1], amps[2], Ts[2], freqs[2], phases[2], mean(ypts)]
 
@@ -153,18 +153,21 @@ function fit_twofreq_ramsey(xpts, ypts, yvars=[])
 
     aic = aicc(fitresult2.sq_error,k2,length(xpts)) - aicc(fitresult1.sq_error,k1,length(xpts))
 
-    println(aic)
-    return fitresult2 #(aic > 0) ? fitresult2 : fitresult1
+    if use_aic
+      return (aic > 0) ? fitresult2 : fitresult1
+    else
+      return fitresult1, fitresult2, aic
+    end
 end
 
 """`fit_sin(xpts, ypts, yvars)`
 Fit to a sine a*sin(2πf t) + b
 """
 function fit_sin(xpts, ypts, yvars=[])
-    model(t, p) = p[1]*sin.(2π*p[2] .* t) + p[3]
+    model(t, p) = p[1]*sin.(2π*p[2] .* t) .+ p[3]
     # Use KT estimation to get a guess for the fit
     freqs,Ts,amps = KT_estimation(ypts, xpts[2]-xpts[1], 2)
-    idx = indmax(abs.(amps))
+    idx = findmax(abs.(amps))[2]
     p_guess = [abs(amps[idx]), Ts[idx], freqs[idx], mean(ypts)];
     return generic_fit(xpts, ypts, model, p_guess,
               x->Dict("a"=>x[1], "f"=>x[2], "b"=>x[3]),
@@ -183,17 +186,17 @@ Fit function in McClure et al., Phys. Rev. App. 2016. Params are:
 """
 function fit_photon_ramsey(xpts, ypts, params)
     params[1:3]*=2*pi #convert to angular frequencies
-    model_0(t, p) = (-imag.(exp.(-(1/params[4]+params[2]*1im).*t + (p[1]-p[2]*params[3]*(1-exp.(-((params[1] + params[3]*1im).*t)))/(params[1]+params[3]*1im))*1im)))
+    model_0(t, p) = (-imag.(exp.(-(1/params[4]+params[2]*1im).*t .+ (p[1].-p[2]*params[3]*(1 .- exp.(-((params[1] + params[3]*1im).*t)))/(params[1]+params[3]*1im))*1im)))
     function model(t, p)
         if params[6] == 1
-            return params[5]*model_0(t, p) + (1-params[5])*model_0(t, [p[1]+pi; p[2:end]])
+            return params[5]*model_0(t, p) + (1 .- params[5])*model_0(t, [p[1]+pi; p[2:end]])
         else
             return model_0(t, p)
         end
     end
     p_guess = [0., 1.]
     result = curve_fit(model, xpts, ypts, p_guess)
-    errors = estimate_errors(result)
+    errors = margin_errors(result, 0.05)
     xfine = linspace(xpts[1],xpts[end],1001)
     fit_curve = (xfine, model(xfine, result.param))
     return (result.param[2], errors[2], fit_curve)
@@ -236,7 +239,7 @@ Fit to RB decay a*(1-b)^x + c
 """
 function fit_RB(xpts, ypts, yvars=[])
     RB_fit_dict(p) = Dict("a" => p[1], "b" => p[2], "c" => p[3])
-    model(n, p) = p[1] * (1-p[2]).^n + p[3]
+    model(n, p) = p[1] * (1 .- p[2]).^n .+ p[3]
     p_guess = [0.5, .01, 0.5]
     return generic_fit(xpts, ypts, model, p_guess, RB_fit_dict, "a * exp(-n/b) + c", yvars=yvars)
 end
