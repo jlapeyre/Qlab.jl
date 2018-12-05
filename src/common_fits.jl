@@ -7,6 +7,7 @@
 #		http://www.apache.org/licenses/LICENSE-2.0
 
 using LsqFit
+using Statistics
 
 ## TODO: Devise a way to get specify a fit as a string...
 ## TODO: Fix types...
